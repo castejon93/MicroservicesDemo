@@ -1,3 +1,6 @@
+using Auth.Application;
+using Auth.Application.Behaviors;
+using FluentValidation;
 using Auth.Application.Interfaces;
 using Auth.Application.Services;
 using Auth.Domain.Interfaces;
@@ -9,6 +12,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Auth.Application.Abstractions;
+using Auth.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,12 +23,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ------------------------------------------------------------
 // 1. DATABASE CONFIGURATION
-// Connection to Auth-specific database (separate from Products)
+// Connection to Auth-specific database (separate from Products
 // ------------------------------------------------------------
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("AuthConnection"),
-        // Retry on transient failures (network issues, etc.)
+        // Retry on transient failures (network issues, etc.
         sqlOptions => sqlOptions.EnableRetryOnFailure(
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(10),
@@ -48,6 +53,8 @@ builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 
 // Application layer services
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
 // ------------------------------------------------------------
 // 3. JWT AUTHENTICATION
@@ -113,11 +120,28 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Register all MediatR handlers discovered in Auth.Application.
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<AssemblyMarker>();
+
+    // Pipeline order matters: Logging wraps everything, Validation short-circuits
+    // bad input before Transaction opens a DB transaction.
+    cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+    cfg.AddOpenBehavior(typeof(TransactionBehavior<,>));
+});
+
+// Auto-discover FluentValidation validators in the Application assembly.
+builder.Services.AddValidatorsFromAssemblyContaining<AssemblyMarker>();
+
 var app = builder.Build();
 
 // ============================================================
 // MIDDLEWARE PIPELINE
 // ============================================================
+
+app.UseMiddleware<ValidationExceptionMiddleware>();
 
 // Development: Enable Swagger UI
 if (app.Environment.IsDevelopment())

@@ -7,7 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="Application.csproj" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageReference Include="MediatR" Version="14.1.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
   </ItemGroup>
 
   <ItemGroup>

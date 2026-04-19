@@ -1,11 +1,17 @@
-using Products.Application.Interfaces;
-using Products.Application.Services;
-using Products.Domain.Interfaces;
-using Products.Infrastructure.Repositories;
+using FluentValidation;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Products.Application;
+using Products.Application.Abstractions;
+using Products.Application.Behaviors;
+using Products.Application.Interfaces;
+using Products.Application.Services;
+using Products.Domain.Interfaces;
 using Products.Infrastructure.Data;
+using Products.Infrastructure.Persistence;
+using Products.Infrastructure.Repositories;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +36,7 @@ builder.Services.AddDbContext<ProductsDbContext>(options =>
 // ------------------------------------------------------------
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
 // ------------------------------------------------------------
 // 3. JWT AUTHENTICATION
@@ -84,7 +91,22 @@ builder.Services.AddCors(options =>
     });
 });
 
+// ============================================================
+// MEDIATR
+// ============================================================
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<AssemblyMarker>();
+    cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+    cfg.AddOpenBehavior(typeof(TransactionBehavior<,>));
+});
+
+builder.Services.AddValidatorsFromAssemblyContaining<AssemblyMarker>();
+
 var app = builder.Build();
+
+app.UseMiddleware<ValidationExceptionMiddleware>();
 
 // ============================================================
 // MIDDLEWARE PIPELINE
