@@ -1,0 +1,65 @@
+# ============================================================
+# FILE: azure-pipelines-products-cd.yml
+# PURPOSE: Deploy Products Microservice to Azure
+# TRIGGER: Manual or after successful Products CI
+# ============================================================
+
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: 'AzureServiceConnection'
+  resourceGroupName: 'rg-microservices-dev'
+  appName: 'products-api'                       # Azure App Service name
+  ciPipelineName: 'Products-CI'                 # Name of CI pipeline
+
+stages:
+# ============================================
+# DEPLOY TO DEV
+# ============================================
+- stage: DeployDev
+  displayName: 'Deploy Products to Dev'
+  jobs:
+  - deployment: DeployProductsDev
+    displayName: 'Deploy Products Microservice'
+    environment: 'Products-Development'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          
+          # Download Products artifacts
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Products Artifacts'
+            inputs:
+              buildType: 'specific'
+              project: '$(System.TeamProjectId)'
+              definition: '$(ciPipelineName)'
+              buildVersionToDownload: 'latest'
+              artifactName: 'products-drop'
+              targetPath: '$(Pipeline.Workspace)/drop'
+
+          # Deploy to Azure App Service
+          - task: AzureWebApp@1
+            displayName: 'Deploy to $(appName)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webAppLinux'
+              appName: '$(appName)'
+              package: '$(Pipeline.Workspace)/drop/Products/*.zip'
+
+          # Configure App Settings
+          - task: AzureAppServiceSettings@1
+            displayName: 'Configure Settings'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appName: '$(appName)'
+              resourceGroupName: '$(resourceGroupName)'
+              appSettings: |
+                [
+                  { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
+                  { "name": "JwtSettings__Issuer", "value": "MicroservicesDemo" },
+                  { "name": "JwtSettings__Audience", "value": "MicroservicesDemo" }
+                ]

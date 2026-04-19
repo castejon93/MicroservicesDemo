@@ -1,0 +1,72 @@
+# ============================================================
+# FILE: azure-pipelines-gateway-ci.yml
+# PURPOSE: Build API Gateway ONLY
+# TRIGGER: Changes in src/Gateway/**
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - src/Gateway/**
+    exclude:
+      - '**/*.md'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotnetVersion: '10.0.x'
+  serviceName: 'Gateway'
+  servicePath: 'src/Gateway/ApiGateway'
+
+stages:
+- stage: Build
+  displayName: 'Build API Gateway'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build & Publish'
+    steps:
+    
+    - checkout: self
+      fetchDepth: 1
+
+    - task: UseDotNet@2
+      displayName: 'Install .NET $(dotnetVersion)'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotnetVersion)'
+        includePreviewVersions: true
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore'
+      inputs:
+        command: 'restore'
+        projects: '$(servicePath)/*.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build'
+      inputs:
+        command: 'build'
+        projects: '$(servicePath)/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(servicePath)/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(serviceName) --no-build'
+        zipAfterPublish: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'gateway-drop'
+        publishLocation: 'Container'

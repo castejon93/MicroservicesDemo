@@ -1,0 +1,106 @@
+# ============================================================
+# FILE: azure-pipelines-auth-ci.yml
+# PURPOSE: Build & Test Auth Microservice ONLY
+# TRIGGER: Changes in src/Services/Auth/** OR src/Shared/**
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - src/Services/Auth/**        # Auth service changes
+      - src/Shared/**               # Shared library changes
+    exclude:
+      - '**/*.md'                   # Ignore documentation
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - src/Services/Auth/**
+      - src/Shared/**
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotnetVersion: '10.0.x'
+  serviceName: 'Auth'
+  servicePath: 'src/Services/Auth'
+
+stages:
+# ============================================
+# BUILD STAGE
+# ============================================
+- stage: Build
+  displayName: 'Build Auth Microservice'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build & Publish'
+    steps:
+    
+    - checkout: self
+      fetchDepth: 1
+
+    - task: UseDotNet@2
+      displayName: 'Install .NET $(dotnetVersion)'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotnetVersion)'
+        includePreviewVersions: true
+
+    # Restore only Auth-related projects
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        command: 'restore'
+        projects: |
+          $(servicePath)/**/*.csproj
+          src/Shared/**/*.csproj
+
+    # Build only Auth-related projects
+    - task: DotNetCoreCLI@2
+      displayName: 'Build $(serviceName) Service'
+      inputs:
+        command: 'build'
+        projects: '$(servicePath)/**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    # Publish Auth.WebAPI
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish $(serviceName).WebAPI'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(servicePath)/Auth.WebAPI/Auth.WebAPI.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(serviceName) --no-build'
+        zipAfterPublish: true
+
+    # Build Docker image (optional)
+    - task: Docker@2
+      displayName: 'Build Docker Image'
+      inputs:
+        containerRegistry: 'YourACRConnection'  # Azure Container Registry
+        repository: 'microservices/auth-api'
+        command: 'build'
+        Dockerfile: '$(servicePath)/Auth.WebAPI/Dockerfile'
+        buildContext: '$(Build.SourcesDirectory)'
+        tags: |
+          $(Build.BuildId)
+          latest
+      condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+
+    # Publish artifacts
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'auth-drop'
+        publishLocation: 'Container'

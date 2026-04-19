@@ -1,0 +1,120 @@
+# ============================================================
+# FILE: docker-compose.yml
+# PURPOSE: Container orchestration for all microservices
+# 
+# SERVICES:
+# - api-gateway (port 5000) - Entry point
+# - auth-api (port 5001) - Authentication
+# - products-api (port 5002) - Products
+# - auth-db - SQL Server for Auth
+# - products-db - SQL Server for Products
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ========================================================
+  # API GATEWAY
+  # Single entry point for all client requests
+  # ========================================================
+  api-gateway:
+    build:
+      context: ./src/Gateway/ApiGateway
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - auth-api
+      - products-api
+    networks:
+      - microservices-network
+
+  # ========================================================
+  # AUTH MICROSERVICE
+  # Handles: Registration, Login, Token Management
+  # ========================================================
+  auth-api:
+    build:
+      context: ./src/Services/Auth/Auth.WebAPI
+      dockerfile: Dockerfile
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__AuthConnection=Server=auth-db;Database=AuthDb;User=sa;Password=YourStrong@Password;TrustServerCertificate=True
+      - JwtSettings__SecretKey=YourSuperSecretKeyThatIsAtLeast32CharactersLong!
+      - JwtSettings__Issuer=MicroservicesDemo
+      - JwtSettings__Audience=MicroservicesDemo
+    depends_on:
+      - auth-db
+    networks:
+      - microservices-network
+
+  # ========================================================
+  # PRODUCTS MICROSERVICE
+  # Handles: Product CRUD operations
+  # ========================================================
+  products-api:
+    build:
+      context: ./src/Services/Products/Products.WebAPI
+      dockerfile: Dockerfile
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__ProductsConnection=Server=products-db;Database=ProductsDb;User=sa;Password=YourStrong@Password;TrustServerCertificate=True
+      - JwtSettings__SecretKey=YourSuperSecretKeyThatIsAtLeast32CharactersLong!
+      - JwtSettings__Issuer=MicroservicesDemo
+      - JwtSettings__Audience=MicroservicesDemo
+    depends_on:
+      - products-db
+    networks:
+      - microservices-network
+
+  # ========================================================
+  # AUTH DATABASE
+  # Separate SQL Server for Auth microservice
+  # ========================================================
+  auth-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Password
+    ports:
+      - "1433:1433"
+    volumes:
+      - auth-db-data:/var/opt/mssql
+    networks:
+      - microservices-network
+
+  # ========================================================
+  # PRODUCTS DATABASE
+  # Separate SQL Server for Products microservice
+  # ========================================================
+  products-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Password
+    ports:
+      - "1434:1433"
+    volumes:
+      - products-db-data:/var/opt/mssql
+    networks:
+      - microservices-network
+
+# ========================================================
+# NETWORKS
+# ========================================================
+networks:
+  microservices-network:
+    driver: bridge
+
+# ========================================================
+# VOLUMES (Persistent storage for databases)
+# ========================================================
+volumes:
+  auth-db-data:
+  products-db-data:
