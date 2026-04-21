@@ -6,8 +6,6 @@ using Microsoft.IdentityModel.Tokens;
 using Products.Application;
 using Products.Application.Abstractions;
 using Products.Application.Behaviors;
-using Products.Application.Interfaces;
-using Products.Application.Services;
 using Products.Domain.Interfaces;
 using Products.Infrastructure.Data;
 using Products.Infrastructure.Persistence;
@@ -35,7 +33,6 @@ builder.Services.AddDbContext<ProductsDbContext>(options =>
 // 2. DEPENDENCY INJECTION
 // ------------------------------------------------------------
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
-builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
 // ------------------------------------------------------------

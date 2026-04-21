@@ -2,7 +2,6 @@ using Auth.Application;
 using Auth.Application.Behaviors;
 using FluentValidation;
 using Auth.Application.Interfaces;
-using Auth.Application.Services;
 using Auth.Domain.Interfaces;
 using Auth.Domain.Settings;
 using Auth.Infrastructure.Data;
@@ -50,9 +49,6 @@ builder.Services.Configure<JwtSettings>(
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
-
-// Application layer services
-builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
