@@ -17,9 +17,18 @@ namespace Auth.Application.Features.Auth.Register
         IPasswordHasher hasher,
         IPublisher publisher) : IRequestHandler<RegisterCommand, AuthResponseDto>
     {
+        /// <summary>
+        /// Registers a new user account.
+        /// </summary>
+        /// <param name="request">The register command with all required user fields.</param>
+        /// <param name="cancellationToken">Token to observe for cooperative cancellation.</param>
+        /// <returns>
+        /// An <see cref="AuthResponseDto"/> with <c>Success=true</c> and an issued token pair on
+        /// success, or <c>Success=false</c> with a message when email or username is already taken.
+        /// </returns>
         public async Task<AuthResponseDto> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {
-            // Reject duplicates up front — cheaper than failing on the unique index.
+            // Reject duplicates early — cheaper than waiting for a unique-constraint violation from SQL.
             if (await users.EmailExistsAsync(request.Email))
                 return new AuthResponseDto { Success = false, Message = "Email already exists." };
 
@@ -29,6 +38,7 @@ namespace Auth.Application.Features.Auth.Register
             var user = new User
             {
                 Username = request.Username,
+                // Normalise email to lower-case for consistent uniqueness checks.
                 Email = request.Email.ToLowerInvariant(),
                 FirstName = request.FirstName,
                 LastName = request.LastName,
@@ -38,7 +48,8 @@ namespace Auth.Application.Features.Auth.Register
                 IsActive = true
             };
 
-            // Issue tokens BEFORE persisting so we can store the refresh token in the same row.
+            // Generate tokens BEFORE persisting so the refresh token can be stored
+            // on the same row in a single SaveChanges call.
             var accessToken = tokens.GenerateAccessToken(user);
             var refreshToken = tokens.GenerateRefreshToken();
             user.RefreshToken = refreshToken;
@@ -46,7 +57,8 @@ namespace Auth.Application.Features.Auth.Register
 
             var saved = await users.AddAsync(user);
 
-            // Fire-and-forget domain event — subscribers handle side effects (welcome email, etc.).
+            // Publish a domain event so interested handlers (e.g. welcome email) can
+            // react without coupling directly to this handler.
             await publisher.Publish(new UserRegistered(saved.Id, saved.Email), cancellationToken);
 
             return new AuthResponseDto

@@ -13,9 +13,20 @@ namespace Auth.Application.Features.Auth.RefreshToken
         IUserRepository users,
         ITokenService tokens) : IRequestHandler<RefreshTokenCommand, AuthResponseDto>
     {
+        /// <summary>
+        /// Validates the (possibly expired) access token together with the stored refresh token
+        /// and, when both are valid, rotates the token pair and persists the change.
+        /// </summary>
+        /// <param name="request">The command carrying the old access token and refresh token.</param>
+        /// <param name="cancellationToken">Token to observe for cooperative cancellation.</param>
+        /// <returns>
+        /// An <see cref="AuthResponseDto"/> with a new token pair on success,
+        /// or <c>Success=false</c> with a message when any validation step fails.
+        /// </returns>
         public async Task<AuthResponseDto> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
         {
-            // Validate signature/claims on the (likely expired) access token — expiry is IGNORED here by design.
+            // Validate signature/claims on the (likely expired) access token.
+            // Lifetime validation is intentionally skipped — expiry is expected here.
             var principal = tokens.GetPrincipalFromExpiredToken(request.AccessToken);
             if (principal is null)
                 return new AuthResponseDto { Success = false, Message = "Invalid access token." };
@@ -26,7 +37,8 @@ namespace Auth.Application.Features.Auth.RefreshToken
 
             var user = await users.GetByIdAsync(userId.Value);
 
-            // All three conditions must hold: user exists, refresh token matches, and it hasn't expired.
+            // All three conditions must hold: user exists, refresh token matches stored value,
+            // and the refresh token has not yet expired.
             if (user is null ||
                 user.RefreshToken != request.RefreshToken ||
                 user.RefreshTokenExpiryTime is null ||
@@ -35,7 +47,7 @@ namespace Auth.Application.Features.Auth.RefreshToken
                 return new AuthResponseDto { Success = false, Message = "Invalid refresh token." };
             }
 
-            // Rotate both tokens — the old refresh token becomes invalid immediately.
+            // Rotate both tokens — the old refresh token is invalidated immediately.
             var newAccessToken = tokens.GenerateAccessToken(user);
             var newRefreshToken = tokens.GenerateRefreshToken();
             user.RefreshToken = newRefreshToken;

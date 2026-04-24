@@ -10,12 +10,21 @@ namespace Auth.Application.Features.Auth.Logout
     public sealed class LogoutCommandHandler(IUserRepository users)
         : IRequestHandler<LogoutCommand, bool>
     {
+        /// <summary>
+        /// Clears the server-side refresh token for the user identified by
+        /// <paramref name="request"/>.<c>UserId</c>, preventing future token-refresh
+        /// calls from succeeding. The stateless access token simply expires on its own.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> if the user was found and updated;
+        /// <see langword="false"/> if the user does not exist.
+        /// </returns>
         public async Task<bool> Handle(LogoutCommand request, CancellationToken cancellationToken)
         {
             var user = await users.GetByIdAsync(request.UserId);
             if (user is null) return false;
 
-            // Clear the server-side refresh token state.
+            // Nullify both fields so any in-flight refresh token is immediately rejected.
             user.RefreshToken = null;
             user.RefreshTokenExpiryTime = null;
             await users.UpdateAsync(user);

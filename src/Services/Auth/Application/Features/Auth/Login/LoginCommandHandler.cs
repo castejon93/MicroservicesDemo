@@ -14,19 +14,28 @@ namespace Auth.Application.Features.Auth.Login
         ITokenService tokens,
         IPasswordHasher hasher) : IRequestHandler<LoginCommand, AuthResponseDto>
     {
+        /// <summary>
+        /// Authenticates the user identified by <paramref name="request"/>.
+        /// </summary>
+        /// <param name="request">The login command carrying the email/username and password.</param>
+        /// <param name="cancellationToken">Token to observe for cooperative cancellation.</param>
+        /// <returns>
+        /// An <see cref="AuthResponseDto"/> with <c>Success=true</c> and a fresh token pair on
+        /// success, or <c>Success=false</c> with a generic error message on failure.
+        /// </returns>
         public async Task<AuthResponseDto> Handle(LoginCommand request, CancellationToken cancellationToken)
         {
             var user = await users.GetByEmailOrUsernameAsync(request.EmailOrUsername);
 
-            // Intentionally return the SAME message for "user not found" and "wrong password"
-            // to avoid leaking which field was incorrect (username enumeration protection).
+            // Return the SAME generic message for both "user not found" and "wrong password"
+            // to prevent username enumeration (an attacker must not learn which field was wrong).
             if (user is null || !user.IsActive)
                 return new AuthResponseDto { Success = false, Message = "Invalid credentials." };
 
             if (!hasher.Verify(request.Password, user.PasswordHash))
                 return new AuthResponseDto { Success = false, Message = "Invalid credentials." };
 
-            // Rotate the refresh token on every successful login to limit reuse windows.
+            // Rotate the refresh token on every successful login to narrow the reuse window.
             var accessToken = tokens.GenerateAccessToken(user);
             var refreshToken = tokens.GenerateRefreshToken();
             user.RefreshToken = refreshToken;

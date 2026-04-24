@@ -39,16 +39,28 @@
     }
 
     /// <summary>
-    /// Basic user information included in auth response.
-    /// Does not include sensitive data like password hash.
+    /// Minimal user projection returned as part of an <see cref="AuthResponseDto"/>.
+    /// Contains only the fields needed by API clients; sensitive data such as
+    /// the password hash and refresh token are intentionally omitted.
     /// </summary>
     public class UserInfo
     {
+        /// <summary>The user's unique database identifier.</summary>
         public int Id { get; set; }
+
+        /// <summary>The user's unique login handle.</summary>
         public string Username { get; set; } = string.Empty;
+
+        /// <summary>The user's email address.</summary>
         public string Email { get; set; } = string.Empty;
+
+        /// <summary>The user's first (given) name.</summary>
         public string FirstName { get; set; } = string.Empty;
+
+        /// <summary>The user's last (family) name.</summary>
         public string LastName { get; set; } = string.Empty;
+
+        /// <summary>The user's authorization role (e.g. <c>"Admin"</c>, <c>"User"</c>).</summary>
         public string Role { get; set; } = string.Empty;
     }
 }
