@@ -1,0 +1,53 @@
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test projects
+**/*Tests*/
+**/*Test*/
+coverage/
+TestResults/
+
+# Environment & secrets
+.env
+.env.*
+*.pfx
+*.key
+appsettings.Development.json
+appsettings.Local.json
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker itself
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.azure/
+
+# Docs
+README.md
+docs/

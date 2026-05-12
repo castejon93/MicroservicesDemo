@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
     <ProjectReference Include="..\Domain\Products.Domain.csproj" />
   </ItemGroup>
 

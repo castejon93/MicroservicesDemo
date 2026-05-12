@@ -70,7 +70,7 @@ namespace Auth.Infrastructure.Data
                     .HasMaxLength(100);
                 entity.HasIndex(e => e.Email).IsUnique();
 
-                // Password hash: required
+                // Password hash: required        
                 entity.Property(e => e.PasswordHash)
                     .IsRequired();
 

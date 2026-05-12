@@ -1,0 +1,53 @@
+{
+  "Routes": [
+    {
+      "DownstreamPathTemplate": "/api/auth/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "auth-service",   
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/auth/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "SwaggerKey": "auth"
+    },
+    {
+      "DownstreamPathTemplate": "/api/products",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "products-service",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/products",
+      "UpstreamHttpMethod": [ "GET", "POST" ],
+      "SwaggerKey": "products",
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/products/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "products-service",
+          "Port": 8080
+        }
+      ],
+      "UpstreamPathTemplate": "/api/products/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "SwaggerKey": "products",
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      }
+    }
+  ],
+
+  "GlobalConfiguration": {
+    "BaseUrl": "http://localhost:5000"
+  }
+}

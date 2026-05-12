@@ -21,4 +21,9 @@
     <ProjectReference Include="..\Domain\Auth.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Messaging\" />
+    <Folder Include="Outbox\" />
+  </ItemGroup>
+
 </Project>

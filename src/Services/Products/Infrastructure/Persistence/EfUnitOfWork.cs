@@ -26,6 +26,7 @@ namespace Products.Infrastructure.Persistence
                 try
                 {
                     var result = await operation(cancellationToken);
+                    await db.SaveChangesAsync(cancellationToken); // flush OutboxMessages staged after last SaveChanges
                     await tx.CommitAsync(cancellationToken);
                     return result;
                 }

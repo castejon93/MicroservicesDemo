@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      SharedKernel is the shared contract library.
+      It contains all IntegrationEvent records (e.g. ProductCreatedIntegrationEvent)
+      that are passed between services over RabbitMQ.
+      Both the publisher (Products) and this consumer must reference it so they
+      share the same serialization contract.
+    -->
+    <ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+    <ProjectReference Include="..\Domain\Notifications.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

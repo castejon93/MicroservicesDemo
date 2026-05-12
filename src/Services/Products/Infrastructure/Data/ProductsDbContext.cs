@@ -1,79 +1,47 @@
-﻿// ============================================================
-// FILE: src/Services/Products/Products.Infrastructure/Data/ProductsDbContext.cs
-// PURPOSE: Database context for Products microservice
-// LAYER: Infrastructure Layer
-// DATABASE: Separate database for Products
-// ============================================================
-
+﻿using Microsoft.EntityFrameworkCore;
 using Products.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
+using Products.Infrastructure.Outbox;
 
-namespace Products.Infrastructure.Data
+namespace Products.Infrastructure.Data;
+
+/// <summary>
+/// EF Core database context for the Products microservice.
+/// Contains the product catalog and the Outbox table used for
+/// reliable integration event delivery to RabbitMQ.
+/// </summary>
+public sealed class ProductsDbContext(DbContextOptions<ProductsDbContext> options)
+    : DbContext(options)
 {
+    /// <summary>Product catalog table.</summary>
+    public DbSet<Product> Products => Set<Product>();
+
     /// <summary>
-    /// Products Database Context
-    /// 
-    /// SEPARATE database from Auth microservice!
-    /// 
-    /// Database: ProductsDb (SQL Server)
-    /// Tables: Products
-    /// 
-    /// This enforces microservice data isolation:
-    /// - Products service owns product data
-    /// - Auth service owns user data
-    /// - No direct database joins between services
+    /// Outbox table — stores serialized integration events pending publication.
+    /// Written atomically with domain changes; read by <see cref="OutboxProcessor"/>.
     /// </summary>
-    public class ProductsDbContext : DbContext
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        public ProductsDbContext(DbContextOptions<ProductsDbContext> options)
-            : base(options)
+        // ── Product ──────────────────────────────────────────────────────────
+        modelBuilder.Entity<Product>(entity =>
         {
-        }
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Name).IsRequired().HasMaxLength(200);
+            entity.Property(p => p.Price).HasPrecision(18, 2);
+        });
 
-        // ============================================
-        // DATABASE TABLES
-        // ============================================
-
-        /// <summary>
-        /// Products table - product catalog data
-        /// </summary>
-        public DbSet<Product> Products { get; set; } = null!;
-
-        /// <summary>
-        /// Configure entity mappings
-        /// </summary>
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        // ── OutboxMessage ────────────────────────────────────────────────────
+        modelBuilder.Entity<OutboxMessage>(entity =>
         {
-            base.OnModelCreating(modelBuilder);
+            entity.HasKey(m => m.Id);
 
-            modelBuilder.Entity<Product>(entity =>
-            {
-                entity.ToTable("Products");
-                entity.HasKey(e => e.Id);
+            // Index on ProcessedOn so the processor efficiently queries
+            // only unprocessed rows (WHERE ProcessedOn IS NULL).
+            entity.HasIndex(m => m.ProcessedOn);
 
-                entity.Property(e => e.Name)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.Property(e => e.Description)
-                    .HasMaxLength(500);
-
-                entity.Property(e => e.Price)
-                    .HasPrecision(18, 2); // 18 digits, 2 decimal places
-            });
-
-            // Seed data
-            modelBuilder.Entity<Product>().HasData(
-                new Product
-                {
-                    Id = 1,
-                    Name = "Sample Product",
-                    Description = "A sample product for testing",
-                    Price = 29.99m,
-                    Stock = 100,
-                    CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-                }
-            );
-        }
+            entity.Property(m => m.EventType).IsRequired().HasMaxLength(500);
+            entity.Property(m => m.Payload).IsRequired();
+        });
     }
 }

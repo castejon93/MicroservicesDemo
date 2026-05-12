@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Auth.Application.Abstractions;
 using Auth.Infrastructure.Persistence;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,6 +96,7 @@ builder.Services.AddAuthentication(options =>
 // ------------------------------------------------------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new()
@@ -103,6 +105,24 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "Authentication and Authorization service"
     });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token (without 'Bearer ' prefix)"
+    });
+
+    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecuritySchemeReference("Bearer", doc),
+            new List<string>()
+        }
+    });
 });
 
 // CORS - Allow requests from API Gateway
@@ -110,7 +130,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("GatewayPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:5000") // API Gateway
+        policy.WithOrigins("http://localhost:5000", "http://localhost:5001", "http://localhost:5002") // Add other origins as needed
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -139,8 +159,8 @@ var app = builder.Build();
 
 app.UseMiddleware<ValidationExceptionMiddleware>();
 
-// Development: Enable Swagger UI
-if (app.Environment.IsDevelopment())
+// Enable Swagger UI in all non-Production environments (Development, Docker, etc.)
+if (!app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI();

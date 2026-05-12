@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/Gateway/">
     <Project Path="src/Gateway/ApiGateway/ApiGateway.csproj" Id="ad97fdc3-7086-4815-bad4-11ba6a43dd32" />
@@ -10,6 +13,12 @@
     <Project Path="src/Services/Auth/Infrastructure/Auth.Infrastructure.csproj" />
     <Project Path="src/Services/Auth/WebAPI/Auth.WebAPI.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Notifications/">
+    <Project Path="src/Services/Notifications/Application/Notifications.Application.csproj" />
+    <Project Path="src/Services/Notifications/Domain/Notifications.Domain.csproj" />
+    <Project Path="src/Services/Notifications/Infrastructure/Notifications.Infrastructure.csproj" />
+    <Project Path="src/Services/Notifications/WebAPI/Notifications.WebAPI.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Products/">
     <Project Path="src/Services/Products/Application/Products.Application.csproj" Id="ede6bb62-fb11-48cf-9d4f-db21e281228f" />
     <Project Path="src/Services/Products/Domain/Products.Domain.csproj" Id="d86aea99-2dfc-4bba-8e2d-6a1edaf00a95" />
@@ -17,4 +26,14 @@
     <Project Path="src/Services/Products/WebAPI/Products.WebAPI.csproj" Id="abf634f0-4640-4de0-9621-63d83bf08ff9" />
   </Folder>
   <Folder Name="/src/Shared/" />
+  <Folder Name="/src/SharedKernel/">
+    <Project Path="src/SharedKernel/SharedKernel.csproj" Id="de9e5c16-cb0c-47da-8002-f38472112f07" />
+  </Folder>
+  <Folder Name="/src/SharedKernel/Events/">
+    <File Path="IntegrationEvent.cs" />
+    <File Path="ProductCreatedIntegrationEvent.cs" />
+    <File Path="ProductDeletedIntegrationEvent.cs" />
+    <File Path="ProductUpdatedIntegrationEvent.cs" />
+    <File Path="UserRegisteredIntegrationEvent.cs" />
+  </Folder>
 </Solution>

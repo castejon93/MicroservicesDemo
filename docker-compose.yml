@@ -1,120 +1,177 @@
 # ============================================================
-# FILE: docker-compose.yml
-# PURPOSE: Container orchestration for all microservices
-# 
-# SERVICES:
-# - api-gateway (port 5000) - Entry point
-# - auth-api (port 5001) - Authentication
-# - products-api (port 5002) - Products
-# - auth-db - SQL Server for Auth
-# - products-db - SQL Server for Products
+# Docker Compose — MicroservicesDemo
+# Starts: SQL Server, RabbitMQ, Auth.WebAPI,
+#         Products.WebAPI, ApiGateway
 # ============================================================
 
-version: '3.8'
-
 services:
-  # ========================================================
-  # API GATEWAY
-  # Single entry point for all client requests
-  # ========================================================
+
+  # ----------------------------------------------------------
+  # SQL SERVER
+  # Hosts both AuthDb and ProductsDb on the same instance
+  # (two separate databases, one server)
+  # ----------------------------------------------------------
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      SA_PASSWORD: "YourStrong!Passw0rd"   # Must meet SQL Server complexity rules
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"                         # Expose so you can connect via SSMS
+    volumes:
+      - sqlserver_data:/var/opt/mssql       # Persist DB data between restarts
+    healthcheck:
+      # Poll until SQL Server is ready to accept connections
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost",
+             "-U", "sa", "-P", "YourStrong!Passw0rd",
+             "-Q", "SELECT 1", "-No"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+
+  # ----------------------------------------------------------
+  # RABBITMQ
+  # Management UI available at http://localhost:15672
+  # Default credentials: guest / guest
+  # ----------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"     # AMQP protocol port (used by services)
+      - "15672:15672"   # Management web UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq    # Persist queues/messages
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      retries: 10
+      start_period: 20s
+
+  # ----------------------------------------------------------
+  # AUTH SERVICE
+  # Handles login, register, JWT token issuing
+  # ----------------------------------------------------------
+  auth-service:
+    build:
+      context: .                                   # Build context = solution root
+      dockerfile: src/Services/Auth/WebAPI/Dockerfile
+    container_name: auth-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: http://+:8080               # Listen on 8080 inside container
+
+      # Override connection string — use sqlserver container name as host
+      ConnectionStrings__AuthConnection: >
+        Server=sqlserver,1433;Database=AuthDb;
+        User Id=sa;Password=YourStrong!Passw0rd;
+        TrustServerCertificate=True;
+
+      # JWT settings must match across all services and the gateway
+      JwtSettings__SecretKey: "YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
+      JwtSettings__Issuer: "MicroservicesDemo"
+      JwtSettings__Audience: "MicroservicesDemo"
+      JwtSettings__AccessTokenExpirationMinutes: "60"
+      JwtSettings__RefreshTokenExpirationDays: "7"
+    ports:
+      - "5001:8080"     # Host:5001 → Container:8080
+    depends_on:
+      sqlserver:
+        condition: service_healthy    # Wait for SQL Server to be ready
+
+  # ----------------------------------------------------------
+  # PRODUCTS SERVICE
+  # Handles product CRUD, raises domain events via Outbox
+  # ----------------------------------------------------------
+  products-service:
+    build:
+      context: .
+      dockerfile: src/Services/Products/WebAPI/Dockerfile
+    container_name: products-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: http://+:8080
+
+      # SQL Server — ProductsDb
+      ConnectionStrings__ProductsConnection: >
+        Server=sqlserver,1433;Database=ProductsDb;
+        User Id=sa;Password=YourStrong!Passw0rd;
+        TrustServerCertificate=True;
+
+      # JWT — must match auth-service and gateway
+      JwtSettings__SecretKey: "YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
+      JwtSettings__Issuer: "MicroservicesDemo"
+      JwtSettings__Audience: "MicroservicesDemo"
+
+      # RabbitMQ — use container name as host
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: guest
+      RabbitMQ__VirtualHost: "/"
+    ports:
+      - "5002:8080"     # Host:5002 → Container:8080
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy  # Wait for RabbitMQ before starting
+
+  # ----------------------------------------------------------
+  # NOTIFICATIONS SERVICE
+  # Consumer-only service: no database, no HTTP API beyond /health.
+  # Listens on the "products.ProductCreatedIntegrationEvent" RabbitMQ
+  # fanout exchange via its own durable queue "notifications.product-created".
+  # Messages accumulate in the queue even when this service is offline.
+  # ----------------------------------------------------------
+  notifications-service:
+    build:
+      context: .
+      dockerfile: src/Services/Notifications/WebAPI/Dockerfile
+    container_name: notifications-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: http://+:8080
+
+      # RabbitMQ — use container name as host (not localhost)
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: guest
+      RabbitMQ__VirtualHost: "/"
+    ports:
+      - "5003:8080"     # Host:5003 → Container:8080 (health check: GET /health)
+    depends_on:
+      rabbitmq:
+        condition: service_healthy  # Wait for broker before declaring queues
+
+  # ----------------------------------------------------------
+  # API GATEWAY (Ocelot)
+  # Single public entry point — routes to auth and products
+  # ----------------------------------------------------------
   api-gateway:
     build:
-      context: ./src/Gateway/ApiGateway
-      dockerfile: Dockerfile
-    ports:
-      - "5000:8080"
+      context: .
+      dockerfile: src/Gateway/ApiGateway/Dockerfile
+    container_name: api-gateway
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      ASPNETCORE_ENVIRONMENT: Docker    # Loads ocelot.Docker.json
+      ASPNETCORE_URLS: http://+:8080
+
+      # JWT — must match all other services
+      JwtSettings__SecretKey: "YourSuperSecretKeyThatIsAtLeast32CharactersLong!"
+      JwtSettings__Issuer: "MicroservicesDemo"
+      JwtSettings__Audience: "MicroservicesDemo"
+    ports:
+      - "5000:8080"     # Host:5000 → Container:8080 (public entry point)
     depends_on:
-      - auth-api
-      - products-api
-    networks:
-      - microservices-network
+      - auth-service
+      - products-service
 
-  # ========================================================
-  # AUTH MICROSERVICE
-  # Handles: Registration, Login, Token Management
-  # ========================================================
-  auth-api:
-    build:
-      context: ./src/Services/Auth/Auth.WebAPI
-      dockerfile: Dockerfile
-    ports:
-      - "5001:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__AuthConnection=Server=auth-db;Database=AuthDb;User=sa;Password=YourStrong@Password;TrustServerCertificate=True
-      - JwtSettings__SecretKey=YourSuperSecretKeyThatIsAtLeast32CharactersLong!
-      - JwtSettings__Issuer=MicroservicesDemo
-      - JwtSettings__Audience=MicroservicesDemo
-    depends_on:
-      - auth-db
-    networks:
-      - microservices-network
-
-  # ========================================================
-  # PRODUCTS MICROSERVICE
-  # Handles: Product CRUD operations
-  # ========================================================
-  products-api:
-    build:
-      context: ./src/Services/Products/Products.WebAPI
-      dockerfile: Dockerfile
-    ports:
-      - "5002:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__ProductsConnection=Server=products-db;Database=ProductsDb;User=sa;Password=YourStrong@Password;TrustServerCertificate=True
-      - JwtSettings__SecretKey=YourSuperSecretKeyThatIsAtLeast32CharactersLong!
-      - JwtSettings__Issuer=MicroservicesDemo
-      - JwtSettings__Audience=MicroservicesDemo
-    depends_on:
-      - products-db
-    networks:
-      - microservices-network
-
-  # ========================================================
-  # AUTH DATABASE
-  # Separate SQL Server for Auth microservice
-  # ========================================================
-  auth-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Password
-    ports:
-      - "1433:1433"
-    volumes:
-      - auth-db-data:/var/opt/mssql
-    networks:
-      - microservices-network
-
-  # ========================================================
-  # PRODUCTS DATABASE
-  # Separate SQL Server for Products microservice
-  # ========================================================
-  products-db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Password
-    ports:
-      - "1434:1433"
-    volumes:
-      - products-db-data:/var/opt/mssql
-    networks:
-      - microservices-network
-
-# ========================================================
-# NETWORKS
-# ========================================================
-networks:
-  microservices-network:
-    driver: bridge
-
-# ========================================================
-# VOLUMES (Persistent storage for databases)
-# ========================================================
+# ----------------------------------------------------------
+# NAMED VOLUMES — persist data between docker-compose up/down
+# ----------------------------------------------------------
 volumes:
-  auth-db-data:
-  products-db-data:
+  sqlserver_data:
+  rabbitmq_data:

@@ -21,8 +21,13 @@ var builder = WebApplication.CreateBuilder(args);
 // - Rate limiting
 // ============================================================
 
-// Load Ocelot configuration from ocelot.json
-builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
+// Load the correct Ocelot config based on the environment
+// In Docker we set ASPNETCORE_ENVIRONMENT=Docker via docker-compose
+var ocelotFile = builder.Environment.IsEnvironment("Docker")
+    ? "ocelot.Docker.json"
+    : "ocelot.json";
+
+builder.Configuration.AddJsonFile(ocelotFile, optional: false, reloadOnChange: true);
 
 // ============================================================
 // JWT AUTHENTICATION
