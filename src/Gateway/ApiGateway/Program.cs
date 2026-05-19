@@ -76,6 +76,20 @@ var app = builder.Build();
 
 app.UseCors("AllowAll");
 
+// Handle CORS preflight (OPTIONS) requests before Ocelot sees them.
+// Ocelot processes all matched routes and would return 404 for OPTIONS
+// if the browser sends a preflight before the actual request.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method == "OPTIONS")
+    {
+        context.Response.StatusCode = 200;
+        await context.Response.CompleteAsync();
+        return;
+    }
+    await next();
+});
+
 // Ocelot must be last in the pipeline
 // It handles all routing to downstream services
 app.UseAuthentication();

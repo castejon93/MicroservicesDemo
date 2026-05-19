@@ -102,12 +102,19 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// CORS - Allow requests from API Gateway
+// CORS - Allow requests from API Gateway and React dev client.
+// In production this should be locked to the gateway origin only;
+// the React app should never call microservices directly.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("GatewayPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:5000") // API Gateway
+        policy.WithOrigins(
+                "http://localhost:5000",  // API Gateway (HTTP)
+                "https://localhost:5000", // API Gateway (HTTPS)
+                "http://localhost:5173",  // React dev server (Vite)
+                "http://localhost:3000"   // React dev server (CRA fallback)
+              )
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -126,7 +133,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// HTTPS redirection is intentionally removed.
+// Microservices behind an API Gateway should not redirect to HTTPS;
+// TLS termination is the gateway's responsibility. Keeping this
+// middleware causes the browser to follow a 301 redirect directly
+// to the microservice, bypassing the gateway and breaking CORS.
 app.UseCors("GatewayPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
